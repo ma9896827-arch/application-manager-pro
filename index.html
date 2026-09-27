@@ -3,103 +3,112 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GT Pro — Professional Management</title>
+  <title>GT Pro — Professional Management System</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-container">
+  <div class="app-layout">
     <header class="app-header">
       <div class="brand">
-        <div class="brand-logo">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+        <div class="brand-logo" aria-label="GT Pro Logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
           </svg>
         </div>
-        <h1>GT Pro</h1>
+        <div class="brand-title">
+          <h1>GT Pro</h1>
+          <span class="brand-subtitle">Application Management</span>
+        </div>
       </div>
-      <div class="header-actions">
-        <button class="btn btn-primary" id="open-upload-modal">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          Upload File
-        </button>
-      </div>
+      <button class="btn btn-primary" id="openUploadModal" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+        <span>Upload File</span>
+      </button>
     </header>
 
     <main class="main-content">
+      <section class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon-wrapper">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <div class="stat-details">
+            <span class="stat-label">Total Files</span>
+            <span class="stat-value" id="totalFilesCount">0</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon-wrapper success">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <div class="stat-details">
+            <span class="stat-label">Storage Engine</span>
+            <span class="stat-value text-success">Active & Ready</span>
+          </div>
+        </div>
+      </section>
+
       <section class="card dashboard-section">
         <div class="section-header">
-          <h2>Application Files</h2>
-          <span class="file-count" id="file-count">0 files</span>
+          <div>
+            <h2>Application Repository</h2>
+            <p class="section-desc">Manage, upload and download your production builds</p>
+          </div>
         </div>
-
-        <div class="search-box">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input type="text" id="search-input" placeholder="Search applications by name or category...">
-        </div>
-
-        <div class="files-list" id="files-list">
-          <!-- Dynamically populated files -->
-        </div>
+        <div class="files-grid" id="filesGrid"></div>
       </section>
     </main>
   </div>
 
   <!-- Upload Modal -->
-  <div class="modal" id="upload-modal">
+  <div class="modal" id="uploadModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Upload Application File</h2>
-        <button class="icon-btn" id="close-modal-btn" aria-label="Close modal">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <h2 id="modalTitle">Upload Application File</h2>
+        <button class="icon-btn" id="closeModal" aria-label="Close dialog" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
         </button>
       </div>
-      <form id="upload-form">
-        <div class="form-group">
-          <label for="app-name">Application Name</label>
-          type="text" id="app-name" placeholder="e.g. Dashboard v2" required>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="app-version">Version</label>
-            <input type="text" id="app-version" placeholder="1.0.0" value="1.0.0">
+
+      <form id="uploadForm">
+        <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="Select file">
+          <div class="drop-zone-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
           </div>
-          <div class="form-group">
-            <label for="app-category">Category</label>
-            <select id="app-category">
-              <option value="Application">Application</option>
-              <option value="Utility">Utility</option>
-              <option value="Document">Document</option>
-              <option value="Archive">Archive</option>
-            </select>
-          </div>
+          <p class="drop-zone-primary">Click or drop application file here</p>
+          <span class="drop-zone-sub" id="fileNameDisplay">Supports APK, ZIP, IPA, or any file</span>
+          <input type="file" id="fileInput" class="visually-hidden">
         </div>
 
-        <div class="form-group">
-          <label>File Upload</label>
-          <div class="drop-zone" id="drop-zone">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="17 8 12 3 7 8"></polyline>
-              <line x1="12" y1="3" x2="12" y2="15"></line>
-            </svg>
-            <p>Drag & drop file here or <label for="file-input" class="browse-link">browse</label></p>
-            <span id="file-name-display">No file chosen</span>
-            <input type="file" id="file-input" style="display: none;" required>
-          </div>
+        <div class="input-group">
+          <label for="customFileNameInput">File Display Name</label>
+          <input type="text" id="customFileNameInput" placeholder="e.g. gt-pro-app.apk" required>
+        </div>
+
+        <div class="input-group">
+          <label for="versionInput">Version Tag</label>
+          <input type="text" id="versionInput" placeholder="e.g. v1.2.0" required>
         </div>
 
         <div class="modal-actions">
-          <button type="button" class="btn btn-secondary" id="cancel-modal-btn">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save File</button>
+          <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
+            Upload File
+          </button>
         </div>
       </form>
     </div>

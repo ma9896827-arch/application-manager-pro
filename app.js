@@ -1,292 +1,343 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const openUploadModalBtn = document.getElementById('open-upload-modal');
-  const uploadModal = document.getElementById('upload-modal');
-  const closeModalBtn = document.getElementById('close-modal-btn');
-  const cancelModalBtn = document.getElementById('cancel-modal-btn');
-  const uploadForm = document.getElementById('upload-form');
-  const fileInput = document.getElementById('file-input');
-  const dropZone = document.getElementById('drop-zone');
-  const fileNameDisplay = document.getElementById('file-name-display');
-  const appNameInput = document.getElementById('app-name');
-  const appVersionInput = document.getElementById('app-version');
-  const appCategorySelect = document.getElementById('app-category');
-  const searchInput = document.getElementById('search-input');
-  const filesList = document.getElementById('files-list');
-  const fileCount = document.getElementById('file-count');
+// GT Pro - Application File Manager (IndexedDB powered for reliable storage & download)
+const DB_NAME = 'GTProDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'files';
 
-  let files = [];
-  let selectedDroppedFile = null;
+let db = null;
 
-  // Load from localStorage safely
-  try {
-    const savedFiles = localStorage.getItem('gt_pro_files');
-    if (savedFiles) {
-      files = JSON.parse(savedFiles);
-    }
-  } catch (err) {
-    console.error('Failed to load files from storage:', err);
-    files = [];
-  }
+// IndexedDB Init
+const initDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-  // Initial render
-  renderFiles('');
-
-  // Modal handlers
-  if (openUploadModalBtn && uploadModal) {
-    openUploadModalBtn.addEventListener('click', () => {
-      uploadModal.classList.add('active');
-    });
-  }
-
-  if (closeModalBtn && uploadModal) {
-    closeModalBtn.addEventListener('click', () => {
-      uploadModal.classList.remove('active');
-    });
-  }
-
-  if (cancelModalBtn && uploadModal) {
-    cancelModalBtn.addEventListener('click', () => {
-      uploadModal.classList.remove('active');
-    });
-  }
-
-  if (uploadModal) {
-    uploadModal.addEventListener('click', (e) => {
-      if (e.target === uploadModal) {
-        uploadModal.classList.remove('active');
+    request.onupgradeneeded = (e) => {
+      const database = e.target.result;
+      if (!database.objectStoreNames.contains(STORE_NAME)) {
+        database.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
       }
-    });
-  }
+    };
 
-  // File input change
-  if (fileInput) {
-    fileInput.addEventListener('change', (e) => {
-      try {
-        if (e.target.files && e.target.files.length > 0) {
-          const file = e.target.files[0];
-          selectedDroppedFile = file;
-          if (fileNameDisplay) fileNameDisplay.textContent = file.name + ' (' + formatFileSize(file.size) + ')';
-          if (appNameInput && !appNameInput.value) {
-            appNameInput.value = file.name.replace(/\.[^/.]+$/, "");
-          }
-        } else {
-          if (fileNameDisplay) fileNameDisplay.textContent = 'No file chosen';
-        }
-      } catch (err) {
-        console.error('File input error:', err);
-      }
-    });
-  }
+    request.onsuccess = (e) => {
+      db = e.target.result;
+      resolve(db);
+    };
 
-  // Drag and drop effects
-  if (dropZone) {
-    ['dragenter', 'dragover'].forEach(eventName => {
-      dropZone.addEventListener(eventName, (e) => {
-        e.preventDefault();
-        dropZone.classList.add('highlight');
-      }, false);
-    });
+    request.onerror = (e) => {
+      console.error('IndexedDB error:', e);
+      reject(e);
+    };
+  });
+};
 
-    ['dragleave', 'drop'].forEach(eventName => {
-      dropZone.addEventListener(eventName, (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('highlight');
-      }, false);
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-      try {
-        const dt = e.dataTransfer;
-        if (dt && dt.files && dt.files.length > 0) {
-          selectedDroppedFile = dt.files[0];
-          if (fileNameDisplay) fileNameDisplay.textContent = selectedDroppedFile.name + ' (' + formatFileSize(selectedDroppedFile.size) + ')';
-          if (appNameInput && !appNameInput.value) {
-            appNameInput.value = selectedDroppedFile.name.replace(/\.[^/.]+$/, "");
-          }
-        }
-      } catch (err) {
-        console.error('Drop error:', err);
-      }
-    });
-  }
-
-  // Search filter
-  if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-      renderFiles(e.target.value);
-    });
-  }
-
-  // Form Submission
-  if (uploadForm) {
-    uploadForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      try {
-        const fileToUpload = selectedDroppedFile || (fileInput && fileInput.files && fileInput.files.length > 0 ? fileInput.files[0] : null);
-
-        if (!fileToUpload) {
-          alert('Please select a file to upload.');
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = function(uploadEvent) {
-          const base64Data = uploadEvent.target.result;
-
-          const newFileObj = {
-            id: Date.now(),
-            name: appNameInput && appNameInput.value.trim() ? appNameInput.value.trim() : fileToUpload.name,
-            originalName: fileToUpload.name,
-            version: appVersionInput && appVersionInput.value.trim() ? appVersionInput.value.trim() : '1.0.0',
-            category: appCategorySelect ? appCategorySelect.value : 'Application',
-            size: formatFileSize(fileToUpload.size),
-            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            fileData: base64Data,
-            fileType: fileToUpload.type || 'application/octet-stream'
-          };
-
-          files.unshift(newFileObj);
-          persistFiles();
-
-          renderFiles(searchInput ? searchInput.value : '');
-          uploadForm.reset();
-          selectedDroppedFile = null;
-          if (fileNameDisplay) fileNameDisplay.textContent = 'No file chosen';
-          if (fileInput) fileInput.value = '';
-          if (uploadModal) uploadModal.classList.remove('active');
-        };
-
-        reader.onerror = function(error) {
-          console.error('FileReader error:', error);
-          alert('Failed to read the file.');
-        };
-
-        reader.readAsDataURL(fileToUpload);
-      } catch (err) {
-        console.error('Submission error:', err);
-      }
-    });
-  }
-
-  function persistFiles() {
+// Database operations
+const getAllFilesFromDB = () => {
+  return new Promise((resolve) => {
+    if (!db) return resolve([]);
     try {
-      localStorage.setItem('gt_pro_files', JSON.stringify(files));
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
     } catch (err) {
-      console.error('Failed to save files to storage:', err);
+      console.error('Fetch error:', err);
+      resolve([]);
     }
-  }
+  });
+};
 
-  function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  }
-
-  function renderFiles(filter = '') {
-    if (!filesList) return;
-
-    const filtered = files.filter(f => 
-      f.name.toLowerCase().includes(filter.toLowerCase()) || 
-      f.category.toLowerCase().includes(filter.toLowerCase()) ||
-      f.originalName.toLowerCase().includes(filter.toLowerCase())
-    );
-
-    if (fileCount) {
-      fileCount.textContent = `${files.length} file${files.length === 1 ? '' : 's'}`;
+const saveFileToDB = (fileRecord) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.add(fileRecord);
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror = (e) => reject(e);
+    } catch (err) {
+      reject(err);
     }
+  });
+};
 
-    if (filtered.length === 0) {
-      filesList.innerHTML = `
-        <div class="empty-state">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+const deleteFileFromDB = (id) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = (e) => reject(e);
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
+// UI Elements
+const uploadModal = document.getElementById('uploadModal');
+const openUploadModal = document.getElementById('openUploadModal');
+const closeModal = document.getElementById('closeModal');
+const fileInput = document.getElementById('fileInput');
+const dropZone = document.getElementById('dropZone');
+const fileNameDisplay = document.getElementById('fileNameDisplay');
+const uploadForm = document.getElementById('uploadForm');
+const filesGrid = document.getElementById('filesGrid');
+const customFileNameInput = document.getElementById('customFileNameInput');
+const versionInput = document.getElementById('versionInput');
+const submitBtn = document.getElementById('submitBtn');
+
+let selectedFileBlob = null;
+let currentFiles = [];
+
+// Format helper
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
+
+const renderFiles = async () => {
+  currentFiles = await getAllFilesFromDB();
+
+  const countEl = document.getElementById('totalFilesCount');
+  if (countEl) countEl.textContent = currentFiles.length;
+
+  if (currentFiles.length === 0) {
+    filesGrid.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
             <line x1="12" y1="18" x2="12" y2="12"></line>
             <line x1="9" y1="15" x2="15" y2="15"></line>
           </svg>
-          <p>No application files found</p>
-          <span>Use the upload button above to add your first application file.</span>
         </div>
-      `;
-      return;
-    }
+        <p class="empty-title">No application files uploaded yet</p>
+        <span class="empty-desc">Click "Upload File" above to add your first APK, package, or build file.</span>
+      </div>`;
+    return;
+  }
 
-    filesList.innerHTML = filtered.map(file => `
-      <div class="file-item" data-id="${file.id}">
-        <div class="file-icon-wrap">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-            <polyline points="13 2 13 9 20 9"></polyline>
+  filesGrid.innerHTML = currentFiles.map((f) => `
+    <div class="file-item" data-id="${f.id}">
+      <div class="file-item-left">
+        <div class="file-badge">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
           </svg>
         </div>
-        <div class="file-details">
-          <div class="file-title-row">
-            <h4>${escapeHtml(file.name)}</h4>
-            <span class="file-badge">${escapeHtml(file.category)}</span>
-          </div>
+        <div class="file-info">
+          <span class="file-name" title="${f.name}">${f.name}</span>
           <div class="file-meta">
-            <span>v${escapeHtml(file.version)}</span>
-            <span>•</span>
-            <span>${escapeHtml(file.size)}</span>
-            <span>•</span>
-            <span>${escapeHtml(file.date)}</span>
+            <span class="version-tag">${f.version}</span>
+            <span class="dot-separator">•</span>
+            <span>${f.size}</span>
+            <span class="dot-separator">•</span>
+            <span>${f.date || 'Recently added'}</span>
           </div>
-        </div>
-        <div class="file-actions">
-          <button class="icon-btn file-download-btn" data-id="${file.id}" title="Download file">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-          </button>
-          <button class="icon-btn file-delete-btn" data-id="${file.id}" title="Delete file">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            </svg>
-          </button>
         </div>
       </div>
-    `).join('');
+      <div class="file-actions">
+        <button type="button" class="btn btn-sm btn-download" onclick="triggerDownload(${f.id})">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Download</span>
+        </button>
+        <button type="button" class="btn btn-sm btn-delete" onclick="triggerDelete(${f.id})" title="Delete file">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  `).join('');
+};
 
-    document.querySelectorAll('.file-download-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = Number(btn.getAttribute('data-id'));
-        const fileObj = files.find(f => f.id === id);
-        if (fileObj && fileObj.fileData) {
-          const a = document.createElement('a');
-          a.href = fileObj.fileData;
-          a.download = fileObj.originalName || fileObj.name;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        }
-      });
-    });
-
-    document.querySelectorAll('.file-delete-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = Number(btn.getAttribute('data-id'));
-        if (confirm('Are you sure you want to delete this application file?')) {
-          files = files.filter(f => f.id !== id);
-          persistFiles();
-          renderFiles(searchInput ? searchInput.value : '');
-        }
-      });
-    });
+// Global download handler
+window.triggerDownload = (id) => {
+  const file = currentFiles.find(item => item.id === id);
+  if (!file || !file.blob) {
+    alert('File could not be found or data is missing.');
+    return;
   }
 
-  function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+  try {
+    const blobUrl = URL.createObjectURL(file.blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = file.name || 'download';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    }, 200);
+  } catch (err) {
+    console.error('Download error:', err);
+    alert('Failed to trigger download: ' + err.message);
   }
+};
+
+// Global delete handler
+window.triggerDelete = async (id) => {
+  const file = currentFiles.find(item => item.id === id);
+  const fileName = file ? file.name : 'this file';
+  if (confirm(`Are you sure you want to delete "${fileName}"?`)) {
+    try {
+      await deleteFileFromDB(id);
+      await renderFiles();
+    } catch (err) {
+      alert('Failed to delete file.');
+    }
+  }
+};
+
+// Modal handlers
+const showModal = () => {
+  uploadModal.classList.add('open');
+};
+
+const hideModal = () => {
+  uploadModal.classList.remove('open');
+  uploadForm.reset();
+  selectedFileBlob = null;
+  fileNameDisplay.textContent = 'No file selected';
+  dropZone.classList.remove('has-file');
+};
+
+openUploadModal.addEventListener('click', showModal);
+closeModal.addEventListener('click', hideModal);
+
+uploadModal.addEventListener('click', (e) => {
+  if (e.target === uploadModal) hideModal();
+});
+
+// Dropzone click & propagation
+dropZone.addEventListener('click', (e) => {
+  if (e.target !== fileInput) {
+    fileInput.click();
+  }
+});
+
+fileInput.addEventListener('click', (e) => {
+  e.stopPropagation();
+});
+
+// Drag & drop support
+['dragenter', 'dragover'].forEach(name => {
+  dropZone.addEventListener(name, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.add('drag-over');
+  });
+});
+
+['dragleave', 'drop'].forEach(name => {
+  dropZone.addEventListener(name, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove('drag-over');
+  });
+});
+
+const handleFileSelect = (file) => {
+  if (!file) return;
+  selectedFileBlob = file;
+  fileNameDisplay.textContent = `${file.name} (${formatFileSize(file.size)})`;
+  dropZone.classList.add('has-file');
+
+  if (!customFileNameInput.value) {
+    customFileNameInput.value = file.name;
+  }
+  if (!versionInput.value) {
+    versionInput.value = 'v1.0.0';
+  }
+};
+
+dropZone.addEventListener('drop', (e) => {
+  const dt = e.dataTransfer;
+  if (dt && dt.files && dt.files.length > 0) {
+    handleFileSelect(dt.files[0]);
+  }
+});
+
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files && e.target.files[0]) {
+    handleFileSelect(e.target.files[0]);
+  }
+});
+
+// Upload submit handler
+uploadForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  if (!selectedFileBlob && (!fileInput.files || !fileInput.files[0])) {
+    alert('Please select a file to upload first.');
+    return;
+  }
+
+  const file = selectedFileBlob || fileInput.files[0];
+  const customName = customFileNameInput.value.trim() || file.name;
+  const version = versionInput.value.trim() || 'v1.0.0';
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Uploading...';
+
+  try {
+    const today = new Date().toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    const fileRecord = {
+      name: customName,
+      version: version,
+      size: formatFileSize(file.size),
+      date: today,
+      blob: file,
+      type: file.type || 'application/octet-stream'
+    };
+
+    await saveFileToDB(fileRecord);
+    hideModal();
+    await renderFiles();
+  } catch (err) {
+    console.error('Upload error:', err);
+    alert('Failed to save file: ' + (err.message || 'Storage error'));
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Upload File';
+  }
+});
+
+// Initialize on page load
+initDB().then(async () => {
+  // Check if initial sample is needed for demonstration when completely fresh
+  const existing = await getAllFilesFromDB();
+  if (existing.length === 0) {
+    // Add default starter file so repository is immediately usable and tested
+    const sampleContent = new Blob(['GT Pro Management Application Package v1.0.0'], { type: 'text/plain' });
+    await saveFileToDB({
+      name: 'gt-pro-release.apk',
+      version: 'v1.0.0',
+      size: '24.5 MB',
+      date: 'Today',
+      blob: sampleContent,
+      type: 'application/vnd.android.package-archive'
+    });
+  }
+  await renderFiles();
+}).catch((err) => {
+  console.error('DB initialization failed:', err);
+  filesGrid.innerHTML = `<div class="empty-state">Database error: Could not initialize local storage.</div>`;
 });
